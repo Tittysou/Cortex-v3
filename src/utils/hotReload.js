@@ -34,10 +34,11 @@ class HotReload {
         callback();
     }
 
-    getAllFiles(dirPath, arrayOfFiles) {
+    getAllFiles(dirPath, arrayOfFiles = []) {
+        if (!fs.existsSync(dirPath)) return arrayOfFiles;
+        
         const files = fs.readdirSync(dirPath);
-        arrayOfFiles = arrayOfFiles || [];
-
+        
         files.forEach(file => {
             const filePath = path.join(dirPath, file);
             if (fs.statSync(filePath).isDirectory()) {
@@ -46,14 +47,14 @@ class HotReload {
                 arrayOfFiles.push(filePath);
             }
         });
-
+        
         return arrayOfFiles;
     }
 
-    loadEvent(filename) {
+    loadEvent(filePath) {
         try {
-            delete require.cache[require.resolve(path.join(this.paths.events, filename))];
-            const event = require(path.join(this.paths.events, filename));
+            delete require.cache[require.resolve(filePath)];
+            const event = require(filePath);
 
             if (event && event.name && typeof event.execute === 'function') {
                 if (event.once) {
@@ -63,10 +64,10 @@ class HotReload {
                 }
                 return event.name;
             }
-            warn(`Skipped invalid event: ${filename}`);
+            warn(`Skipped invalid event: ${path.basename(filePath)}`);
             return null;
         } catch (err) {
-            error(`Failed to load event ${filename}: ${err}`);
+            error(`Failed to load event ${path.basename(filePath)}: ${err}`);
             return null;
         }
     }
@@ -100,10 +101,10 @@ class HotReload {
         }
     }
 
-    async loadCommand(filename, silent = false) {
+    async loadCommand(filePath, silent = false) {
         try {
-            delete require.cache[require.resolve(path.join(this.paths.commands, filename))];
-            const command = require(path.join(this.paths.commands, filename));
+            delete require.cache[require.resolve(filePath)];
+            const command = require(filePath);
 
             if (command && command.data && command.data.name) {
                 this.client.commands.set(command.data.name, command);
@@ -111,10 +112,10 @@ class HotReload {
                 if (!silent) success(`Command loaded: ${command.data.name}`);
                 return command.data.toJSON();
             }
-            warn(`Skipped invalid command: ${filename}`);
+            warn(`Skipped invalid command: ${path.basename(filePath)}`);
             return null;
         } catch (err) {
-            error(`Failed to load command ${filename}: ${err}`);
+            error(`Failed to load command ${path.basename(filePath)}: ${err}`);
             return null;
         }
     }
@@ -136,77 +137,88 @@ class HotReload {
         }
     }
 
-    loadPrefixCommand(filename) {
+    loadPrefixCommand(filePath) {
         try {
-            delete require.cache[require.resolve(path.join(this.paths.prefix, filename))];
-            const command = require(path.join(this.paths.prefix, filename));
+            delete require.cache[require.resolve(filePath)];
+            const command = require(filePath);
 
             if (command && command.name && typeof command.execute === 'function') {
-                command.filename = filename;
+                command.filename = path.basename(filePath);
                 this.client.prefixCommands.set(command.name, command);
                 return command;
             }
-            warn(`Skipped invalid prefix command: ${filename}`);
+            warn(`Skipped invalid prefix command: ${path.basename(filePath)}`);
             return null;
         } catch (err) {
-            error(`Failed to load prefix command ${filename}: ${err}`);
+            error(`Failed to load prefix command ${path.basename(filePath)}: ${err}`);
             return null;
         }
     }
 
     initializeWatchers() {
-        fs.watch(this.paths.events, (eventType, filename) => {
-            if (!filename.endsWith('.js')) return;
-            this.debounce(`event-${filename}`, () => {
-                const eventName = this.loadEvent(filename);
-                if (eventName) success(`Event updated: ${eventName}`);
-            });
-        });
+        const watchRecursively = (dir) => {
+            if (!fs.existsSync(dir)) return;
 
-        fs.watch(this.paths.commands, (eventType, filename) => {
-            if (!filename.endsWith('.js')) return;
-            this.debounce(`command-${filename}`, () => {
-                this.loadCommand(filename);
-            });
-        });
+            fs.watch(dir, (eventType, filename) => {
+                if (!filename || !filename.endsWith('.js')) return;
+                
+                const fullPath = path.join(dir, filename);
+                if (!fs.existsSync(fullPath)) return;
 
-        this.paths.components.forEach(directory => {
-            if (!fs.existsSync(directory)) {
-                fs.mkdirSync(directory, { recursive: true });
-            }
-            fs.watch(directory, (eventType, filename) => {
-                if (!filename.endsWith('.js')) return;
-                this.debounce(`component-${filename}`, () => {
-                    if (this.loadComponent(directory, filename)) {
-                        success(`Component updated: ${filename}`);
+                this.debounce(`file-${fullPath}`, () => {
+                    if (dir.includes('events')) {
+                        const eventName = this.loadEvent(fullPath);
+                        if (eventName) success(`Event updated: ${eventName}`);
+                    } else if (dir.includes('commands')) {
+                        this.loadCommand(fullPath);
+                    } else if (dir.includes('prefix')) {
+                        const command = this.loadPrefixCommand(fullPath);
+                        if (command) success(`Prefix command updated: ${command.name}`);
+                    } else if (dir.includes('components')) {
+                        if (this.loadComponent(dir, filename)) {
+                            success(`Component updated: ${filename}`);
+                        }
                     }
                 });
             });
-        });
 
-        if (!fs.existsSync(this.paths.prefix)) {
-            fs.mkdirSync(this.paths.prefix, { recursive: true });
-        }
-        fs.watch(this.paths.prefix, (eventType, filename) => {
-            if (!filename.endsWith('.js')) return;
-            this.debounce(`prefix-${filename}`, () => {
-                const command = this.loadPrefixCommand(filename);
-                if (command) success(`Prefix command updated: ${command.name}`);
+            fs.readdirSync(dir).forEach(subdir => {
+                const subdirPath = path.join(dir, subdir);
+                if (fs.statSync(subdirPath).isDirectory()) {
+                    watchRecursively(subdirPath);
+                }
             });
-        });
+        };
+
+        watchRecursively(this.paths.events);
+        watchRecursively(this.paths.commands);
+        watchRecursively(this.paths.prefix);
+        this.paths.components.forEach(dir => watchRecursively(dir));
     }
 
     initialize() {
-        fs.readdirSync(this.paths.events).filter(f => f.endsWith('.js')).forEach(f => this.loadEvent(f));
-        fs.readdirSync(this.paths.commands).filter(f => f.endsWith('.js')).forEach(f => this.loadCommand(f, true));
-        this.paths.components.forEach(dir => {
-            if (fs.existsSync(dir)) {
-                fs.readdirSync(dir).filter(f => f.endsWith('.js')).forEach(f => this.loadComponent(dir, f));
+        Object.values(this.paths).forEach(path => {
+            if (typeof path === 'string' && !fs.existsSync(path)) {
+                fs.mkdirSync(path, { recursive: true });
             }
         });
-        if (fs.existsSync(this.paths.prefix)) {
-            fs.readdirSync(this.paths.prefix).filter(f => f.endsWith('.js')).forEach(f => this.loadPrefixCommand(f));
-        }
+
+        const eventFiles = this.getAllFiles(this.paths.events);
+        const commandFiles = this.getAllFiles(this.paths.commands);
+        const prefixFiles = this.getAllFiles(this.paths.prefix);
+
+        eventFiles.forEach(filePath => this.loadEvent(filePath));
+        commandFiles.forEach(filePath => this.loadCommand(filePath, true));
+        prefixFiles.forEach(filePath => this.loadPrefixCommand(filePath));
+
+        this.paths.components.forEach(dir => {
+            if (fs.existsSync(dir)) {
+                const componentFiles = this.getAllFiles(dir);
+                componentFiles.forEach(filePath => {
+                    this.loadComponent(path.dirname(filePath), path.basename(filePath));
+                });
+            }
+        });
 
         this.initializeWatchers();
 

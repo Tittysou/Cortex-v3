@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits } = require('discord.js');
+const { Client, GatewayIntentBits, Collection } = require('discord.js');
 const { logTotalLines } = require('./utils/LineCount');
 const { checkIntents } = require('./utils/IntentChecker');
 const { info, success, warn, error, debug } = require('./utils/logs');
@@ -14,6 +14,8 @@ const { extractURLs } = require('./utils/Regex');
 const { paginate } = require('./utils/Pagination')
 const HotReload = require('./utils/hotReload');
 const config = require('../config.json');
+const { loadUtils } = require('./functions/loadUtils');
+const { loadFiles } = require('./functions/loadFiles');
 
 const client = new Client({
     intents: [
@@ -40,6 +42,8 @@ const initializeBot = async () => {
 
     const hotReload = new HotReload(client);
     hotReload.initialize();
+    loadUtils(client);
+    loadFiles(client);
     
     interactionLogger(client);
     checkIntents(client);
