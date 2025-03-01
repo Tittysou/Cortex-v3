@@ -13,6 +13,7 @@ Welcome to the **Cortex v3 Discord Bot Base**! This base is designed to provide 
 - **Permission & Cooldown System**
 - **Multi-Guild Support**
 - **Much more utils to help you out even more!**
+- **Subfolder support**
 
 ## Requirements
 
