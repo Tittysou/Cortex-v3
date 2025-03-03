@@ -14,6 +14,7 @@ Welcome to the **Cortex v3 Discord Bot Base**! This base is designed to provide 
 - **Multi-Guild Support**
 - **Much more utils to help you out even more!**
 - **Subfolder support**
+- **Multiple token support**
 
 ## Requirements
 
@@ -38,17 +39,21 @@ Welcome to the **Cortex v3 Discord Bot Base**! This base is designed to provide 
 3. Rename the `example-config.json` to `config.json`:
    ```json
     {
-        "token": "",
-        "id": "",
+      "tokens": [
+         ""
+      ],
+      "botNames": [
+         ""
+      ], 
       "developerIds": [
             "",
             ""
-        ],
-        "devGuild": "",
-        "prefix": "",
-        "mongoDBUrl": "",
-        "webhookToken": "",
-        "webhhookId": ""
+      ],
+      "devGuild": "",
+      "prefix": "",
+      "mongoDBUrl": "",
+      "webhookToken": "",
+      "webhhookId": ""
     }
    ```
 
