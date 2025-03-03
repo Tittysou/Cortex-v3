@@ -1,22 +1,38 @@
-const mongoose = require('mongoose');
-const { debug, error, warn } = require('./logs');
+const process = require('process');
+const log = require('./logs');
 
-const configureProcessHandlers = () => {
-    process.on('uncaughtException', handleCriticalError);
-    process.on('unhandledRejection', handleCriticalError);
-    process.on('warning', logWarning);
-    process.on('SIGINT', handleGracefulExit);
-    process.on('SIGTERM', handleGracefulExit);
+const AntiCrash = () => {
+    process.on('uncaughtException', (error) => {
+        log('error', 'Uncaught Exception:', error);
+    });
+
+    process.on('unhandledRejection', (error) => {
+        log('error', 'Unhandled Rejection:', error);
+    });
+
+    process.on('TypeError', (error) => {
+        log('error', 'Type Error:', error);
+    });
+
+    process.on('SyntaxError', (error) => {
+        log('error', 'Syntax Error:', error);
+    });
+
+    process.on('ReferenceError', (error) => {
+        log('error', 'Reference Error:', error);
+    });
+
+    process.on('RangeError', (error) => {
+        log('error', 'Range Error:', error);
+    });
+
+    process.on('Error', (error) => {
+        log('error', 'Error:', error);
+    });
+
+    process.on('Warning', (error) => {
+        log('warn', 'Warning:', error);
+    });
 };
 
-const handleCriticalError = (err) => {
-    error(`Critical error encountered: ${err}`);
-};
-
-const logWarning = (warning) => {
-    warn(`Process warning: ${warning.name} - ${warning.message}`);
-};
-
-module.exports = {
-    configureProcessHandlers,
-};
+module.exports = AntiCrash;
