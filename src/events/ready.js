@@ -4,7 +4,7 @@ const { debug } = require('../utils/logs');
 
 module.exports = {
     name: Events.ClientReady,
-    execute(client) {
+    async execute(client) {
         client.csize = () => {
             let totalCommands = 0;
 

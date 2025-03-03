@@ -11,46 +11,32 @@ const { simplecron } = require('./utils/Cron');
 const { normalizePath } = require('./utils/PathNormalizer');
 const { parseCSV, generateCSV } = require('./utils/CSVParser');
 const { extractURLs } = require('./utils/Regex');
-const { paginate } = require('./utils/Pagination')
+const { paginate } = require('./utils/Pagination');
 const HotReload = require('./utils/hotReload');
 const config = require('../config.json');
 const { loadUtils } = require('./functions/loadUtils');
 const { loadFiles } = require('./functions/loadFiles');
+const inquirer = require('inquirer').default;
+const readline = require('readline');
 
-const client = new Client({
-    intents: [
-        GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.GuildMembers,
-        GatewayIntentBits.GuildPresences,
-        GatewayIntentBits.GuildVoiceStates,
-        GatewayIntentBits.GuildMessageTyping,
-        GatewayIntentBits.GuildMessageReactions,
-        GatewayIntentBits.GuildInvites,
-        GatewayIntentBits.GuildEmojisAndStickers,
-        GatewayIntentBits.GuildScheduledEvents,
-        GatewayIntentBits.AutoModerationConfiguration,
-        GatewayIntentBits.AutoModerationExecution,
-        GatewayIntentBits.GuildModeration,
-        GatewayIntentBits.MessageContent,
-    ],
-});
+const getIntents = () => [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildPresences,
+    GatewayIntentBits.GuildVoiceStates,
+    GatewayIntentBits.GuildMessageTyping,
+    GatewayIntentBits.GuildMessageReactions,
+    GatewayIntentBits.GuildInvites,
+    GatewayIntentBits.GuildEmojisAndStickers,
+    GatewayIntentBits.GuildScheduledEvents,
+    GatewayIntentBits.AutoModerationConfiguration,
+    GatewayIntentBits.AutoModerationExecution,
+    GatewayIntentBits.GuildModeration,
+    GatewayIntentBits.MessageContent,
+];
 
-const initializeBot = async () => {
-    await checkConfig();
-    require('./utils/packageChecker')(client);
-
-    const hotReload = new HotReload(client);
-    hotReload.initialize();
-    loadUtils(client);
-    loadFiles(client);
-    
-    interactionLogger(client);
-    checkIntents(client);
-    connectToDatabase(client);
-    logTotalLines(client);
-    WebhookUtil(client);
-        
+const setupInteractionHandlers = async (client) => {
     const ButtonHandler = require('./handlers/buttonHandler');
     const SelectMenuHandler = require('./handlers/menuHandler');
     const ModalHandler = require('./handlers/modalHandler');
@@ -78,13 +64,70 @@ const initializeBot = async () => {
             console.error('Error handling interaction:', error);
         }
     });
-
-    client.login(config.token);
 };
 
-initializeBot();
+const selectToken = async () => {
+    if (Array.isArray(config.tokens) && config.tokens.length > 1) {
+        const choices = config.tokens.map((token, index) => {
+            const name = config.botNames && config.botNames[index] 
+                ? config.botNames[index] 
+                : `Bot ${index + 1}`;
+            return { name, value: { token, name } };
+        });
+        
+        const answer = await inquirer.prompt([{
+            type: 'list',
+            name: 'selectedBot',
+            message: 'Select which bot to start:',
+            choices
+        }]);
+        
+        return answer.selectedBot;
+    }
+    
+    if (Array.isArray(config.tokens) && config.tokens.length === 1) {
+        return { token: config.tokens[0], name: config.botNames[0] || 'Bot 1' };
+    }
+    
+    return { token: config.token, name: 'Bot 1' };
+};
+
+const initializeBot = async () => {
+    const { token, name } = await selectToken();
+    debug(`Selected bot: ${name}`);
+
+    const client = new Client({ intents: getIntents() });
+    
+    require('./utils/packageChecker')(client);
+
+    const hotReload = new HotReload(client);
+    hotReload.initialize();
+    loadUtils(client);
+    loadFiles(client);
+    
+    interactionLogger(client);
+    checkIntents(client);
+    connectToDatabase(client);
+    logTotalLines(client);
+    WebhookUtil(client);
+    
+    await setupInteractionHandlers(client);
+    
+    try {
+        await client.login(token);
+        success('Bot logged in successfully');
+    } catch (loginError) {
+        error(`Failed to login: ${loginError.message}`);
+        process.exit(1);
+    }
+};
+
+initializeBot().catch(err => {
+    error(`Error during initialization: ${err}`);
+    process.exit(1);
+});
 
 process.on('SIGINT', () => {
-    debug("Shutting down..")
-    process.exit(0)
+    debug("Shutting down..");
+    process.exit(0);
 });

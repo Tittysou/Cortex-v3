@@ -28,7 +28,7 @@ module.exports = {
             }));
         } else {
             await interaction.reply(hiddenReply({
-                content: `Only you can see this, it's a custom ephemeral message!`
+                content: `Only you can see this, it's a custom ephemeral message!!`
             }));
         }
     }
