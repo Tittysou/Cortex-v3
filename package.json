@@ -3,7 +3,7 @@
   "dependencies": {
     "discord-api-types": "^0.37.103",
     "discord.js": "^14.18.0",
-    "inquirer": "^12.4.2",
+    "inquirer": "^8.2.4",
     "mongodb": "^6.10.0",
     "node-cron": "^3.0.3",
     "sqlite3": "^5.1.7"

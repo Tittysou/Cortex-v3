@@ -74,13 +74,18 @@ class HotReload {
     }
 
     updateCommands() {
-        new REST({ version: '10' }).setToken(config.token)
-            .put(Routes.applicationCommands(config.id), { 
+        const selectedBotInfo = JSON.parse(fs.readFileSync('./temp-selected-bot.json', 'utf8'));
+        const token = selectedBotInfo.token;
+        if (!token) {
+            console.error(`Token is not set for bot index ${selectedBotInfo.index}`);
+            return;
+        }
+        new REST({ version: '10' }).setToken(token)
+            .put(Routes.applicationCommands(config.botIds[selectedBotInfo.index]), { 
                 body: Array.from(this.client.commands.values()).map(c => c.data.toJSON()) 
             })
             .catch(err => error(`Failed to update slash commands: ${err}`));
     }
-
     initialize() {
         this.watch(path.join(this.root, 'events'), 'event');
         this.watch(path.join(this.root, 'commands'), 'command');

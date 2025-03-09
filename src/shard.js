@@ -1,9 +1,11 @@
 const AdvancedShardManager = require('../src/utils/sharding');
 const config = require('../config.json');
 const { shard, error, debug } = require('../src/utils/logs');
-const inquirer = require('inquirer').default;
+const inquirer = require('inquirer');
+const fs = require('fs');
 
 const path = './src/index.js';
+let manager;
 const selectToken = async () => {
     if (Array.isArray(config.tokens) && config.tokens.length > 1) {
         const choices = config.tokens.map((token, index) => {
@@ -34,11 +36,12 @@ const initializeShardManager = async () => {
     try {
         const { token, name, index } = await selectToken();
         debug(`Selected bot for sharding: ${name}`);
-        const fs = require('fs');
         const selectedBotInfo = JSON.stringify({ token, name, index });
         fs.writeFileSync('./temp-selected-bot.json', selectedBotInfo);
 
-        const manager = new AdvancedShardManager(path, {
+        process.env.SELECTED_BOT_INDEX = index.toString();
+
+        manager = new AdvancedShardManager(path, {
             token: token,
             totalShards: 'auto',
             shardsPerCluster: 2,
@@ -81,13 +84,26 @@ initializeShardManager().catch(err => {
     process.exit(1);
 });
 
-process.on('SIGINT', () => {
+process.on('SIGINT', async () => {
     try {
-        const fs = require('fs');
-        if (fs.existsSync('./temp-selected-bot.json')) {
-            fs.unlinkSync('./temp-selected-bot.json');
+        if (manager) {
+            if (typeof manager.destroy === 'function') {
+                await manager.destroy();
+            } else if (typeof manager.close === 'function') {
+                await manager.close();
+            } else {
+            }
         }
     } catch (err) {
+        error(`Error shutting down shard manager: ${err}`);
+    } finally {
+        try {
+            if (fs.existsSync('./temp-selected-bot.json')) {
+                fs.unlinkSync('./temp-selected-bot.json');
+            }
+        } catch (cleanupErr) {
+            error(`Error cleaning up temp files: ${cleanupErr}`);
+        }
+        process.exit(0);
     }
-    process.exit(0);
 });
