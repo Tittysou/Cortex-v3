@@ -18,6 +18,8 @@ const { loadUtils } = require('./functions/loadUtils');
 const { loadFiles } = require('./functions/loadFiles');
 const inquirer = require('inquirer').default;
 const readline = require('readline');
+const fs = require('fs');
+const path = require('path');
 
 const getIntents = () => [
     GatewayIntentBits.Guilds,
@@ -66,29 +68,71 @@ const setupInteractionHandlers = async (client) => {
     });
 };
 
+const getSelectedBotFromFile = () => {
+    try {
+        const tempFilePath = path.resolve('./temp-selected-bot.json');
+        if (fs.existsSync(tempFilePath)) {
+            const data = fs.readFileSync(tempFilePath, 'utf8');
+            return JSON.parse(data);
+        }
+    } catch (err) {
+        error(`Error reading selected bot data: ${err.message}`);
+    }
+    return null;
+};
+
 const selectToken = async () => {
-    if (Array.isArray(config.tokens) && config.tokens.length > 1) {
-        const choices = config.tokens.map((token, index) => {
-            const name = config.botNames && config.botNames[index] 
-                ? config.botNames[index] 
-                : `Bot ${index + 1}`;
-            return { name, value: { token, name } };
-        });
-        
-        const answer = await inquirer.prompt([{
-            type: 'list',
-            name: 'selectedBot',
-            message: 'Select which bot to start:',
-            choices
-        }]);
-        
-        return answer.selectedBot;
+    const selectedBotFromFile = getSelectedBotFromFile();
+    if (selectedBotFromFile) {
+        debug(`Using bot selection from file: ${selectedBotFromFile.name}`);
+        return selectedBotFromFile;
     }
     
-    if (Array.isArray(config.tokens) && config.tokens.length === 1) {
-        return { token: config.tokens[0], name: config.botNames[0] || 'Bot 1' };
+    if (process.env.USING_SHARDING === 'true' && process.env.SELECTED_BOT_INDEX) {
+        const index = parseInt(process.env.SELECTED_BOT_INDEX);
+        
+        if (index === -1) {
+            debug(`Using default token from config`);
+            return { token: config.token, name: 'Bot 1' };
+        }
+        
+        if (Array.isArray(config.tokens) && index >= 0 && index < config.tokens.length) {
+            const name = process.env.SELECTED_BOT_NAME || 
+                         (config.botNames && config.botNames[index] ? config.botNames[index] : `Bot ${index + 1}`);
+            
+            debug(`Using token for ${name} from environment variables`);
+            return { token: config.tokens[index], name };
+        }
+        
+        error(`Invalid bot index received from shard manager: ${index}`);
     }
     
+    if (process.env.USING_SHARDING !== 'true') {
+        if (Array.isArray(config.tokens) && config.tokens.length > 1) {
+            const choices = config.tokens.map((token, index) => {
+                const name = config.botNames && config.botNames[index] 
+                    ? config.botNames[index] 
+                    : `Bot ${index + 1}`;
+                return { name, value: { token, name } };
+            });
+            
+            const answer = await inquirer.prompt([{
+                type: 'list',
+                name: 'selectedBot',
+                message: 'Select which bot to start:',
+                choices
+            }]);
+            
+            return answer.selectedBot;
+        }
+    }
+    
+    if (Array.isArray(config.tokens) && config.tokens.length > 0) {
+        debug(`Using first bot in tokens array as fallback`);
+        return { token: config.tokens[0], name: config.botNames?.[0] || 'Bot 1' };
+    }
+    
+    debug(`Using token from config.token as last resort`);
     return { token: config.token, name: 'Bot 1' };
 };
 
@@ -115,7 +159,7 @@ const initializeBot = async () => {
     
     try {
         await client.login(token);
-        success('Bot logged in successfully');
+        success(`Bot ${name} logged in successfully${process.env.SHARD_ID ? ` (Shard ${process.env.SHARD_ID})` : ''}`);
     } catch (loginError) {
         error(`Failed to login: ${loginError.message}`);
         process.exit(1);
