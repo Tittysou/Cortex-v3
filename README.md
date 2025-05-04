@@ -73,5 +73,5 @@ Welcome to the **Cortex v3 Discord Bot Base**! This base is designed to provide 
 
 Feel free to fork this repository and submit pull requests with improvements, bug fixes, or new features!
 
-Happy coding! 🚀
+Happy coding! 
 
